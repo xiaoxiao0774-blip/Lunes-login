@@ -282,7 +282,7 @@ def login(sb) -> bool:
     else:
         print("ℹ️ 未检测到 Turnstile")
 
-    print("🖱️ 敲击回车提交表单...")
+    print("🖱️ 提交登录...")
     sb.press_keys('input[name="password"]', '\n')
 
     print("⏳ 等待登录跳转...")
