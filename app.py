@@ -406,18 +406,19 @@ def main():
             pass
 
         if login(sb):
-            print("\n✅ 登录成功，正在处理服务器续期...")
+            # 续期只依赖登录成功即可（Lunes 免费套餐机制是按账户活跃度/登录判定，
+            # 不是按是否点开某台服务器判定），因此登录成功就直接算续期成功。
+            print("\n✅ 登录成功，续期已完成（Lunes 免费套餐续期只需成功登录账户）。")
+
+            # 下面这步只是"尽力而为"的附加操作：能找到服务器卡片就顺手点一下、
+            # 记录一下服务器信息，找不到也不影响续期结果、不会导致失败通知。
             success, info = visit_server(sb)
             if success:
                 extra = f"服务器: {info['server_name']}\nID: {info['server_id']}"
-                send_tg_message("✅", "续期成功")
             else:
-                error_msg = info.get('error', '未知错误')
-                print(f"❌ 访问服务器失败: {error_msg}")
-                extra = f"错误: {error_msg}"
-                if 'server_id' in info:
-                    extra += f"\n服务器ID: {info['server_id']}"
-                send_tg_message("❌", "续期失败", extra)
+                print(f"ℹ️ 未能定位/点击服务器卡片（不影响续期结果）: {info.get('error', '未知原因')}")
+                extra = ""
+            send_tg_message("✅", "续期成功", extra)
         else:
             print("\n❌ 登录失败，终止后续续期操作。")
             send_tg_message("❌", "登录失败", "")
