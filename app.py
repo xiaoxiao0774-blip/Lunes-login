@@ -303,23 +303,56 @@ def login(sb) -> bool:
     sb.save_screenshot("login_failed.png")
     return False
 
-# ===== 修正后的 visit_server =====
+# ===== 修正后的 visit_server（多选择器兜底 + 失败诊断） =====
+_SERVER_CARD_SELECTORS = [
+    'a.server-card',
+    'a[class*="server-card"]',
+    'a[class*="ServerCard"]',
+    'div[class*="server-card"] a',
+    'a[href*="/servers/"]',
+]
+
+def _dump_diagnostics(sb, tag: str):
+    """选择器全部失效时，保存截图和完整 HTML，方便后续直接对照真实 DOM 改选择器"""
+    try:
+        sb.save_screenshot(f"visit_server_fail_{tag}.png")
+        html = sb.get_page_source() or ""
+        with open(f"visit_server_fail_{tag}.html", "w", encoding="utf-8") as f:
+            f.write(html)
+        print(f"🩺 已保存诊断文件: visit_server_fail_{tag}.png / .html")
+    except Exception as e:
+        print(f"⚠️ 保存诊断文件失败: {e}")
+
+def _find_server_card(sb):
+    """依次尝试多个选择器；都失败则用正则从整页 HTML 里兜底找 /servers/(\\d+) 链接"""
+    for sel in _SERVER_CARD_SELECTORS:
+        try:
+            elems = sb.find_elements(sel)
+        except Exception:
+            elems = []
+        for el in elems:
+            href = el.get_attribute('href') or ""
+            if re.search(r'/servers/\d+', href):
+                return el, href, sel
+    return None, None, None
+
 def visit_server(sb) -> (bool, dict):
     print("🔍 正在查找服务器卡片...")
-    try:
-        sb.wait_for_element('a.server-card', timeout=15)
-    except Exception:
-        print("❌ 未找到服务器卡片（可能没有服务器）")
-        return False, {"error": "未找到服务器卡片，可能账户无服务器"}
 
-    cards = sb.find_elements('a.server-card')
-    if not cards:
-        return False, {"error": "未找到服务器卡片"}
+    # 给客户端渲染（React/Vue 之类）多留点时间，避免过早判定失败
+    card = href = matched_sel = None
+    for _ in range(15):
+        card, href, matched_sel = _find_server_card(sb)
+        if card:
+            break
+        time.sleep(1)
 
-    card = cards[0]
-    href = card.get_attribute('href')
-    if not href:
-        return False, {"error": "卡片缺少 href 属性"}
+    if not card:
+        print("❌ 未找到服务器卡片（尝试了多个选择器均无匹配）")
+        _dump_diagnostics(sb, "no_card")
+        return False, {"error": "未找到服务器卡片，可能页面结构已变化或账户无服务器"}
+
+    print(f"ℹ️ 命中选择器: {matched_sel}")
 
     match = re.search(r'/servers/(\d+)', href)
     if not match:
